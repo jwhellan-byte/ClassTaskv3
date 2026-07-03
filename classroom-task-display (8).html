@@ -1,0 +1,2105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Task Display — Kimberley Science</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+
+<!--
+  TASK DISPLAY — Kimberley Science
+  ------------------------------------
+  A single self-contained file. No accounts, no server, no data saved
+  anywhere outside this browser tab. Achievement entries live only in
+  memory for the lesson and disappear on reload — by design.
+
+  LOGO: expects a file called "ks_crest.png" in the same folder/repo as
+  this HTML file. Until it's present it falls back to a simple "KS" badge
+  automatically.
+-->
+
+<style>
+  :root {
+    --navy: #0E1630;
+    --navy-soft: #16224A;
+    --navy-soft2: #1E2C5C;
+    --blue: #4C7BFF;
+    --amber: #FFB648;
+    --red: #FF6B6B;
+    --green: #3DDC97;
+    --ink: #F4F7FF;
+    --mist: #8FA0C7;
+    --line: rgba(255,255,255,0.10);
+    --accent: #4C7BFF;       /* timer ring, tip dots, accent bar, glow */
+    --stage-bg: #0E1630;     /* main display background — changeable via swatches */
+    --title-color: #F4F7FF;  /* activity title text — changeable via swatches */
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    height: 100%;
+    margin: 0;
+    background: var(--navy);
+    color: var(--ink);
+    font-family: 'DM Sans', sans-serif;
+    overflow: hidden;
+  }
+
+  button, input, textarea {
+    font-family: 'DM Sans', sans-serif;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--blue);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.001ms !important;
+      transition-duration: 0.001ms !important;
+    }
+  }
+
+  /* ---------- App shell ---------- */
+
+  .app {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+
+  /* ---------- Top bar ---------- */
+
+  .topbar {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.9rem 1.6rem;
+    background: var(--navy-soft);
+    border-bottom: 1px solid var(--line);
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-width: 0;
+  }
+
+  #schoolLogo {
+    height: 42px;
+    width: auto;
+    display: block;
+  }
+
+  .logo-fallback {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--blue), #2A4BD6);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 0.95rem;
+    color: white;
+    flex-shrink: 0;
+  }
+
+  .school-name {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 1.05rem;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    flex-shrink: 0;
+  }
+
+  .clock {
+    font-size: 1.05rem;
+    font-weight: 500;
+    color: var(--mist);
+    letter-spacing: 0.02em;
+    min-width: 3.6em;
+    text-align: right;
+  }
+
+  .icon-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 1px solid var(--line);
+    background: var(--navy-soft2);
+    color: var(--ink);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .icon-btn:hover { background: #263a78; }
+  .icon-btn svg { width: 20px; height: 20px; }
+
+  /* ---------- Stage ---------- */
+
+  .stage {
+    flex: 1;
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    position: relative;
+    overflow: hidden;
+    background: var(--stage-bg);
+    transition: background 0.4s ease;
+  }
+
+  .stage-glow {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at 50% 32%, var(--accent) 0%, transparent 60%);
+    opacity: 0.16;
+    pointer-events: none;
+    transition: background 0.4s ease;
+    z-index: 0;
+  }
+
+  .stage-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2.3rem;
+    padding: 2rem 4rem;
+    text-align: center;
+    position: relative;
+    z-index: 1;
+    min-width: 0;
+  }
+
+  .accent-bar {
+    width: 70px;
+    height: 5px;
+    border-radius: 999px;
+    background: var(--accent);
+    transition: background 0.4s ease;
+    margin: -1.1rem auto 0;
+  }
+
+  /* ---------- Achievements sidebar (persistent, icon + name only) ---------- */
+
+  .achieve-sidebar {
+    flex-shrink: 0;
+    width: clamp(160px, 14vw, 230px);
+    border-left: 1px solid var(--line);
+    background: rgba(255, 255, 255, 0.02);
+    padding: 1.4rem 1.1rem;
+    display: none;
+    flex-direction: column;
+    gap: 0.9rem;
+    position: relative;
+    z-index: 1;
+    overflow: hidden;
+  }
+  .achieve-sidebar.show { display: flex; }
+
+  .achieve-sidebar-title {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 0.78rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--mist);
+    flex-shrink: 0;
+  }
+
+  .achieve-sidebar-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+    overflow-y: auto;
+  }
+
+  .sidebar-entry {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+  .sidebar-entry .icon-wrap {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: var(--navy-soft2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    color: var(--accent);
+  }
+  .sidebar-entry .icon-wrap svg { width: 16px; height: 16px; }
+  .sidebar-entry .name {
+    font-size: 0.92rem;
+    font-weight: 600;
+    word-break: normal;
+    overflow-wrap: break-word;
+    line-height: 1.25;
+  }
+
+  .activity-title {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: clamp(3rem, 9vw, 8.5rem);
+    line-height: 1;
+    letter-spacing: 0.01em;
+    text-transform: uppercase;
+    margin: 0;
+    max-width: 100%;
+    word-break: normal;
+    overflow-wrap: break-word;
+    hyphens: none;
+    color: var(--title-color);
+    transition: color 0.4s ease;
+  }
+
+  .message-text {
+    font-weight: 500;
+    font-size: clamp(1.25rem, 2.5vw, 2.3rem);
+    color: var(--mist);
+    max-width: 62ch;
+    margin: 0;
+    display: none;
+  }
+  .message-text.show { display: block; }
+
+  /* ---------- Rotating tips (used when the message has 2+ lines) ---------- */
+
+  .tip-rotator {
+    display: none;
+    max-width: 62ch;
+    margin: 0;
+  }
+  .tip-rotator.show { display: block; }
+
+  .tip-current {
+    font-weight: 500;
+    font-size: clamp(1.25rem, 2.5vw, 2.3rem);
+    color: var(--mist);
+    display: inline-block;
+    transition: opacity 0.35s ease, transform 0.35s ease;
+    opacity: 1;
+    transform: translateY(0);
+  }
+  .tip-current.fade-out {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+
+  .tip-dots {
+    display: flex;
+    gap: 0.45rem;
+    justify-content: center;
+    margin-top: 0.8rem;
+  }
+  .tip-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--line);
+    transition: background 0.3s;
+  }
+  .tip-dot.active { background: var(--accent); }
+
+  /* ---------- Timer dial ---------- */
+
+  .timer-dial {
+    width: clamp(140px, 17vw, 210px);
+    height: clamp(140px, 17vw, 210px);
+    position: relative;
+    display: none;
+  }
+  .timer-dial.show { display: block; }
+
+  .timer-dial svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .timer-track { fill: none; stroke: var(--line); stroke-width: 8; }
+  .timer-progress {
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 8;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 0.9s linear, stroke 0.3s;
+  }
+  .timer-dial.urgent .timer-progress { stroke: var(--red); }
+
+  .timer-readout {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.2rem;
+  }
+  .timer-eyebrow {
+    font-size: 0.7rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--mist);
+    font-weight: 700;
+  }
+  .timer-digits {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: clamp(1.5rem, 3.2vw, 2.6rem);
+    font-variant-numeric: tabular-nums;
+  }
+  .timer-dial.urgent .timer-digits { color: var(--red); }
+
+  .timer-close {
+    position: absolute;
+    top: -12px;
+    right: -12px;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--navy-soft2);
+    border: 1px solid var(--line);
+    color: var(--mist);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    line-height: 1;
+    z-index: 2;
+  }
+  .timer-close:hover { color: var(--ink); background: #263a78; }
+
+  .time-up-label {
+    color: var(--red);
+    font-weight: 700;
+    font-size: 1rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    display: none;
+    margin-top: -1.6rem;
+  }
+  .time-up-label.show { display: block; }
+
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.04); }
+  }
+  .timer-dial.urgent { animation: pulse 1s ease-in-out infinite; }
+
+  /* ---------- Mini mode ---------- */
+
+  .app.mini .topbar { padding: 0.45rem 0.7rem; }
+  .app.mini .school-name { display: none; }
+  .app.mini #schoolLogo, .app.mini .logo-fallback { height: 26px; width: 26px; }
+  .app.mini .clock { font-size: 0.8rem; }
+  .app.mini .stage-main { padding: 0.8rem; gap: 0.6rem; }
+  .app.mini .activity-title { font-size: clamp(1.3rem, 7vw, 2rem); }
+  .app.mini .accent-bar { display: none; }
+  .app.mini .achieve-sidebar { display: none !important; }
+  .app.mini .message-text { font-size: 0.85rem; max-width: 30ch; }
+  .app.mini .tip-rotator { max-width: 30ch; }
+  .app.mini .tip-current { font-size: 0.85rem; }
+  .app.mini .tip-dots { margin-top: 0.4rem; }
+  .app.mini .tip-dot { width: 5px; height: 5px; }
+  .app.mini .timer-dial { width: 64px; height: 64px; }
+  .app.mini .timer-digits { font-size: 0.95rem; }
+  .app.mini .timer-eyebrow { font-size: 0.55rem; }
+  .app.mini .gear-btn, .app.mini .achieve-btn { display: none; }
+  .app.mini .exit-mini-btn { display: flex; }
+
+  .exit-mini-btn {
+    display: none;
+  }
+
+  /* ---------- Control panel ---------- */
+
+  .control-panel {
+    position: fixed;
+    top: 0;
+    right: 0;
+    height: 100vh;
+    width: 400px;
+    max-width: 92vw;
+    background: var(--navy-soft);
+    border-left: 1px solid var(--line);
+    transform: translateX(100%);
+    transition: transform 0.3s ease;
+    overflow-y: auto;
+    padding: 1.5rem 1.5rem 3rem;
+    z-index: 60;
+  }
+  .control-panel.open { transform: translateX(0); }
+
+  .panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.4rem;
+  }
+  .panel-title {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 1.1rem;
+  }
+  .panel-close {
+    background: none;
+    border: none;
+    color: var(--mist);
+    font-size: 1.4rem;
+    cursor: pointer;
+    line-height: 1;
+    padding: 0.2rem 0.5rem;
+  }
+  .panel-close:hover { color: var(--ink); }
+
+  .panel-section {
+    margin-bottom: 1.8rem;
+    padding-bottom: 1.4rem;
+    border-bottom: 1px solid var(--line);
+  }
+  .panel-section:last-child { border-bottom: none; }
+
+  .panel-label {
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--mist);
+    font-weight: 700;
+    margin-bottom: 0.7rem;
+    display: block;
+  }
+
+  .panel-hint {
+    font-size: 0.74rem;
+    color: var(--mist);
+    margin: 0.5rem 0 0;
+    line-height: 1.4;
+  }
+
+  .activity-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .chip {
+    padding: 0.5rem 0.95rem;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: var(--navy-soft2);
+    color: var(--ink);
+    font-size: 0.85rem;
+    cursor: pointer;
+  }
+  .chip:hover { background: #263a78; }
+  .chip.active { background: var(--blue); border-color: var(--blue); }
+
+  .row { display: flex; gap: 0.5rem; }
+  .row input[type="text"], .row input[type="number"] {
+    flex: 1;
+    background: var(--navy-soft2);
+    border: 1px solid var(--line);
+    color: var(--ink);
+    border-radius: 8px;
+    padding: 0.55rem 0.7rem;
+    font-size: 0.9rem;
+  }
+  textarea {
+    width: 100%;
+    background: var(--navy-soft2);
+    border: 1px solid var(--line);
+    color: var(--ink);
+    border-radius: 8px;
+    padding: 0.6rem 0.7rem;
+    font-size: 0.9rem;
+    resize: vertical;
+    min-height: 4.2em;
+  }
+
+  .btn {
+    border: none;
+    border-radius: 8px;
+    padding: 0.55rem 1rem;
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+    color: white;
+    background: var(--blue);
+  }
+  .btn:hover { filter: brightness(1.1); }
+  .btn.ghost {
+    background: var(--navy-soft2);
+    color: var(--ink);
+    border: 1px solid var(--line);
+  }
+  .btn.danger { background: var(--red); }
+  .btn.success { background: var(--green); color: #06291c; }
+  .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+  .btn-row { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.7rem; }
+
+  .segmented { display: flex; gap: 0.4rem; margin-bottom: 0.8rem; }
+  .segmented .chip { flex: 1; text-align: center; }
+
+  .duration-row { display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem; }
+  .duration-row label { font-size: 0.78rem; color: var(--mist); }
+  .duration-row input { width: 4.5em; }
+
+  .preset-row { display: flex; gap: 0.4rem; margin-bottom: 0.9rem; }
+  .preset-row .chip { padding: 0.35rem 0.7rem; font-size: 0.78rem; }
+
+  .check-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+    color: var(--mist);
+    margin-top: 0.6rem;
+  }
+  .check-row input { accent-color: var(--blue); width: 16px; height: 16px; }
+
+  .theme-swatches { display: flex; gap: 0.6rem; flex-wrap: wrap; }
+  .swatch {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    cursor: pointer;
+    padding: 0;
+  }
+  .swatch.active {
+    border-color: var(--ink);
+    box-shadow: 0 0 0 2px var(--navy-soft);
+  }
+
+  /* ---------- Achievement modal ---------- */
+
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(6, 10, 26, 0.7);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 80;
+    padding: 1.5rem;
+  }
+  .modal-backdrop.open { display: flex; }
+
+  .modal-card {
+    background: var(--navy-soft);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    width: 480px;
+    max-width: 100%;
+    max-height: 88vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.2rem 1.4rem;
+    border-bottom: 1px solid var(--line);
+  }
+  .modal-title { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 1.05rem; }
+  .modal-body { padding: 1.4rem; overflow-y: auto; }
+
+  .icon-picker { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1.1rem; }
+  .icon-option {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    background: var(--navy-soft2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--mist);
+  }
+  .icon-option svg { width: 22px; height: 22px; }
+  .icon-option.selected { background: var(--blue); border-color: var(--blue); color: white; }
+
+  .field-label { font-size: 0.78rem; color: var(--mist); margin: 0.8rem 0 0.35rem; display: block; }
+
+  .achieve-list { margin-top: 1.4rem; display: flex; flex-direction: column; gap: 0.55rem; max-height: 220px; overflow-y: auto; }
+  .achieve-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.7rem;
+    background: var(--navy-soft2);
+    border-radius: 10px;
+    padding: 0.6rem 0.7rem;
+  }
+  .achieve-row .icon-wrap {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: var(--navy); display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; color: var(--amber);
+  }
+  .achieve-row .icon-wrap svg { width: 16px; height: 16px; }
+  .achieve-row .info { flex: 1; min-width: 0; }
+  .achieve-row .name { font-weight: 700; font-size: 0.88rem; }
+  .achieve-row .note { font-size: 0.82rem; color: var(--mist); margin-top: 0.1rem; }
+  .achieve-row .time { font-size: 0.7rem; color: var(--mist); margin-top: 0.2rem; }
+  .achieve-row .del {
+    background: none; border: none; color: var(--mist); cursor: pointer; font-size: 1rem; padding: 0 0.2rem;
+  }
+  .achieve-row .del:hover { color: var(--red); }
+  .empty-note { color: var(--mist); font-size: 0.85rem; text-align: center; padding: 1rem 0; }
+
+  .modal-footer {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 1rem 1.4rem;
+    border-top: 1px solid var(--line);
+  }
+  .copy-confirm { font-size: 0.78rem; color: var(--green); align-self: center; }
+
+  /* ---------- Celebration overlay ---------- */
+
+  .celebrate-overlay {
+    position: absolute;
+    inset: 0;
+    background: var(--navy);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1.1rem;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.4s ease;
+    text-align: center;
+    padding: 2rem;
+    z-index: 2;
+  }
+  .celebrate-overlay.show { opacity: 1; }
+  .celebrate-icon {
+    width: 84px; height: 84px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--amber), #FF8A3D);
+    display: flex; align-items: center; justify-content: center;
+    color: #2B1500;
+  }
+  .celebrate-icon svg { width: 44px; height: 44px; }
+  .celebrate-eyebrow {
+    font-size: 0.85rem; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--amber); font-weight: 700;
+  }
+  .celebrate-name {
+    font-family: 'Syne', sans-serif; font-weight: 800;
+    font-size: clamp(2rem, 6vw, 4rem);
+  }
+  .celebrate-note {
+    font-size: clamp(1.1rem, 2.2vw, 1.7rem);
+    color: var(--mist);
+    max-width: 60ch;
+  }
+
+  @media (max-width: 700px) {
+    .stage { flex-direction: column; }
+    .stage-main { padding: 1.5rem; }
+    .achieve-sidebar {
+      width: 100%;
+      max-height: 160px;
+      border-left: none;
+      border-top: 1px solid var(--line);
+    }
+    .control-panel { width: 100%; }
+  }
+
+  /* ---------- Transition overlay (Respect / Proud / Succeed) ---------- */
+
+  .transition-overlay {
+    position: fixed;
+    inset: 0;
+    background: #0E1630;
+    z-index: 200;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    cursor: pointer;
+  }
+  .transition-overlay.open { display: flex; }
+
+  .transition-pairs {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: clamp(1.2rem, 3vw, 3rem);
+    width: 100%;
+    padding: 2rem 4rem;
+  }
+
+  .transition-pair {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: clamp(1.5rem, 5vw, 6rem);
+    width: 100%;
+    opacity: 0;
+    transform: scale(0.92);
+    transition: opacity 0.5s ease, transform 0.5s ease;
+  }
+  .transition-pair.visible {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  .transition-word {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    text-transform: uppercase;
+    line-height: 1;
+    letter-spacing: 0.02em;
+    color: #F4F7FF;
+    font-size: clamp(2.5rem, 7vw, 7rem);
+    flex: 1;
+    text-align: right;
+  }
+  .transition-divider {
+    width: 3px;
+    height: clamp(2.5rem, 5vw, 5rem);
+    background: rgba(255,255,255,0.15);
+    border-radius: 999px;
+    flex-shrink: 0;
+  }
+  .transition-action {
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 500;
+    font-size: clamp(1.1rem, 2.8vw, 3rem);
+    color: var(--mist);
+    flex: 1;
+    text-align: left;
+    letter-spacing: 0.01em;
+  }
+
+  .transition-footer {
+    position: absolute;
+    bottom: 1.8rem;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 1.8rem;
+  }
+  .transition-speed-btn {
+    background: rgba(255,255,255,0.07);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 999px;
+    color: var(--mist);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.82rem;
+    font-weight: 700;
+    padding: 0.4rem 1rem;
+    cursor: pointer;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .transition-speed-btn.active {
+    background: rgba(255,255,255,0.15);
+    color: #F4F7FF;
+    border-color: rgba(255,255,255,0.3);
+  }
+  .transition-speed-btn:hover { background: rgba(255,255,255,0.13); }
+
+  .transition-dismiss {
+    font-size: 0.75rem;
+    color: rgba(255,255,255,0.25);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+</style>
+</head>
+<body>
+
+<div class="app" id="appRoot">
+
+  <!-- ===== Top bar ===== -->
+  <header class="topbar">
+    <div class="brand">
+      <img id="schoolLogo" src="ks_crest.png" alt="School logo"
+           onerror="this.style.display='none'; document.getElementById('logoFallback').style.display='flex';">
+      <div class="logo-fallback" id="logoFallback">KS</div>
+      <div class="school-name">Kimberley Science</div>
+    </div>
+    <div class="topbar-right">
+      <button class="btn ghost exit-mini-btn" id="exitMiniBtn" title="Exit mini mode">Exit mini mode</button>
+      <div class="clock" id="clockEl"></div>
+      <button class="icon-btn gear-btn" id="gearBtn" title="Open controls" aria-label="Open controls">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"></circle>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- ===== Main stage ===== -->
+  <main class="stage" id="stageEl">
+    <div class="stage-glow" id="stageGlow"></div>
+
+    <div class="stage-main">
+      <h1 class="activity-title" id="activityTitle">Green pen</h1>
+      <div class="accent-bar"></div>
+      <p class="message-text" id="messageText"></p>
+      <div class="tip-rotator" id="tipRotator">
+        <span class="tip-current" id="tipCurrent"></span>
+        <div class="tip-dots" id="tipDots"></div>
+      </div>
+
+      <div class="timer-dial" id="timerDial">
+        <button class="timer-close" id="timerCloseBtn" title="Hide timer" aria-label="Hide timer">×</button>
+        <svg viewBox="0 0 100 100">
+          <circle class="timer-track" cx="50" cy="50" r="44"></circle>
+          <circle class="timer-progress" id="timerProgress" cx="50" cy="50" r="44"
+                  stroke-dasharray="276.46" stroke-dashoffset="0"></circle>
+        </svg>
+        <div class="timer-readout">
+          <span class="timer-eyebrow" id="timerEyebrow">Counting down</span>
+          <span class="timer-digits" id="timerDigits">05:00</span>
+        </div>
+      </div>
+      <div class="time-up-label" id="timeUpLabel">Time's up</div>
+    </div>
+
+    <!-- Achievements sidebar: appears once the first one is recorded, icon + name only -->
+    <aside class="achieve-sidebar" id="achieveSidebar">
+      <div class="achieve-sidebar-title">Well done</div>
+      <div class="achieve-sidebar-list" id="achieveSidebarList"></div>
+    </aside>
+
+    <!-- Achievement celebration, shown briefly on top of the whole stage -->
+    <div class="celebrate-overlay" id="celebrateOverlay">
+      <div class="celebrate-icon" id="celebrateIcon"></div>
+      <div class="celebrate-eyebrow">Well done</div>
+      <div class="celebrate-name" id="celebrateName"></div>
+      <div class="celebrate-note" id="celebrateNote"></div>
+    </div>
+  </main>
+
+  <!-- ===== Controls panel ===== -->
+  <aside class="control-panel" id="controlPanel">
+    <div class="panel-header">
+      <span class="panel-title">Controls</span>
+      <button class="panel-close" id="panelCloseBtn" aria-label="Close controls">×</button>
+    </div>
+
+    <!-- Activity -->
+    <div class="panel-section">
+      <span class="panel-label">Activity</span>
+      <div class="activity-grid" id="activityGrid"></div>
+      <div class="row" style="margin-top:0.7rem;">
+        <input type="text" id="customActivityInput" placeholder="Type your own…">
+        <button class="btn ghost" id="customActivityBtn">Set</button>
+      </div>
+      <div class="btn-row">
+        <button class="btn ghost" id="saveActivitiesBtn">Save list</button>
+        <button class="btn ghost" id="loadActivitiesBtn">Load list</button>
+        <button class="btn ghost" id="restoreDefaultsBtn">Restore defaults</button>
+      </div>
+      <p class="panel-hint">Save your activity list (with any messages) as a JSON file. Load it next lesson to pick up where you left off. "Restore defaults" resets to the built-in set.</p>
+      <input type="file" id="loadFileInput" accept=".json" style="display:none;">
+    </div>
+
+    <!-- Message -->
+    <div class="panel-section">
+      <span class="panel-label">Optional message</span>
+      <textarea id="messageInput" placeholder="One line for a single message. Add more lines, one per row, to rotate through several short tips."></textarea>
+      <p class="panel-hint">Graph activities auto-fill with drawing reminders below — edit or clear as needed. Add your own lines any time to rotate through several short tips instead of one block of text.</p>
+      <div class="btn-row">
+        <button class="btn" id="applyMessageBtn">Show on screen</button>
+        <button class="btn ghost" id="clearMessageBtn">Clear</button>
+      </div>
+    </div>
+
+    <!-- Timer -->
+    <div class="panel-section">
+      <span class="panel-label">Timer</span>
+      <div class="segmented">
+        <button class="chip active" id="modeDownBtn">Countdown</button>
+        <button class="chip" id="modeUpBtn">Count up</button>
+      </div>
+
+      <div id="durationControls">
+        <div class="duration-row">
+          <label>Minutes</label>
+          <input type="number" id="minutesInput" min="0" max="120" value="5">
+          <label>Seconds</label>
+          <input type="number" id="secondsInput" min="0" max="59" value="0">
+        </div>
+        <div class="preset-row">
+          <button class="chip" data-preset="1">1m</button>
+          <button class="chip" data-preset="2">2m</button>
+          <button class="chip" data-preset="5">5m</button>
+          <button class="chip" data-preset="10">10m</button>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn success" id="startBtn">Start</button>
+        <button class="btn ghost" id="pauseBtn">Pause</button>
+        <button class="btn ghost" id="resetBtn">Reset</button>
+      </div>
+
+      <label class="check-row">
+        <input type="checkbox" id="soundToggle" checked>
+        Play a chime when countdown reaches zero
+      </label>
+      <label class="check-row">
+        <input type="checkbox" id="showTimerToggle">
+        Show timer on screen
+      </label>
+    </div>
+
+    <!-- Colour theme -->
+    <div class="panel-section">
+      <span class="panel-label">Background colour</span>
+      <div class="theme-swatches" id="bgSwatches">
+        <button class="swatch active" data-bg="#0E1630" style="background:#0E1630;" title="Midnight (default)" aria-label="Midnight"></button>
+        <button class="swatch" data-bg="#1a1a2e" style="background:#1a1a2e;" title="Deep space" aria-label="Deep space"></button>
+        <button class="swatch" data-bg="#1e3a1e" style="background:#1e3a1e;" title="Forest" aria-label="Forest"></button>
+        <button class="swatch" data-bg="#3b1a4a" style="background:#3b1a4a;" title="Plum" aria-label="Plum"></button>
+        <button class="swatch" data-bg="#2d2d2d" style="background:#2d2d2d;" title="Charcoal" aria-label="Charcoal"></button>
+        <button class="swatch" data-bg="#fef9c3" style="background:#fef9c3;" title="Pastel yellow" aria-label="Pastel yellow"></button>
+        <button class="swatch" data-bg="#fce7f3" style="background:#fce7f3;" title="Pastel pink" aria-label="Pastel pink"></button>
+        <button class="swatch" data-bg="#dcfce7" style="background:#dcfce7;" title="Pastel green" aria-label="Pastel green"></button>
+        <button class="swatch" data-bg="#ede9fe" style="background:#ede9fe;" title="Pastel lilac" aria-label="Pastel lilac"></button>
+        <button class="swatch" data-bg="#dbeafe" style="background:#dbeafe;" title="Pastel blue" aria-label="Pastel blue"></button>
+      </div>
+
+      <span class="panel-label" style="margin-top:1rem;">Activity title colour</span>
+      <div class="theme-swatches" id="titleSwatches">
+        <button class="swatch active" data-title="#F4F7FF" style="background:#F4F7FF;" title="White (default)" aria-label="White"></button>
+        <button class="swatch" data-title="#0E1630" style="background:#0E1630;" title="Navy" aria-label="Navy"></button>
+        <button class="swatch" data-title="#1a1a1a" style="background:#1a1a1a;" title="Near-black" aria-label="Near-black"></button>
+        <button class="swatch" data-title="#FFB648" style="background:#FFB648;" title="Amber" aria-label="Amber"></button>
+        <button class="swatch" data-title="#3DDC97" style="background:#3DDC97;" title="Green" aria-label="Green"></button>
+        <button class="swatch" data-title="#4C7BFF" style="background:#4C7BFF;" title="Blue" aria-label="Blue"></button>
+      </div>
+      <p class="panel-hint">For pastel backgrounds, navy or near-black text usually reads best. For dark backgrounds, white works well.</p>
+    </div>
+
+    <!-- Display options -->
+    <div class="panel-section">
+      <span class="panel-label">Display options</span>
+      <label class="check-row">
+        <input type="checkbox" id="clockToggle" checked>
+        Show clock in top bar
+      </label>
+      <div class="btn-row">
+        <button class="btn ghost" id="miniModeBtn">Switch to mini mode</button>
+      </div>
+    </div>
+
+    <!-- Achievements -->
+    <div class="panel-section">
+      <span class="panel-label">Achievements</span>
+      <button class="btn achieve-btn" id="openAchieveBtn" style="width:100%;">Record an achievement</button>
+    </div>
+
+    <!-- Transition slide -->
+    <div class="panel-section">
+      <span class="panel-label">Transition slide</span>
+      <p class="panel-hint" style="margin-bottom:0.8rem;">Reveals Respect / Proud / Succeed one pair at a time with a gong. Tap the screen or press Escape to dismiss early.</p>
+      <div style="display:flex;gap:0.5rem;margin-bottom:0.8rem;">
+        <button class="transition-speed-btn active" data-speed="5000" id="speedCalm">Calm — 5s</button>
+        <button class="transition-speed-btn" data-speed="4000" id="speedStandard">Standard — 4s</button>
+        <button class="transition-speed-btn" data-speed="2500" id="speedBrisk">Brisk — 2.5s</button>
+      </div>
+      <button class="btn" id="openTransitionBtn" style="width:100%;">Launch transition slide</button>
+    </div>
+  </aside>
+
+  <!-- ===== Transition overlay (Respect / Proud / Succeed) ===== -->
+  <div class="transition-overlay" id="transitionOverlay">
+    <div class="transition-pairs" id="transitionPairs">
+      <div class="transition-pair" id="tPair0">
+        <span class="transition-word">Respect</span>
+        <span class="transition-divider"></span>
+        <span class="transition-action">Equipment down</span>
+      </div>
+      <div class="transition-pair" id="tPair1">
+        <span class="transition-word">Proud</span>
+        <span class="transition-divider"></span>
+        <span class="transition-action">Sit up</span>
+      </div>
+      <div class="transition-pair" id="tPair2">
+        <span class="transition-word">Succeed</span>
+        <span class="transition-divider"></span>
+        <span class="transition-action">Eyes to the front</span>
+      </div>
+    </div>
+    <div class="transition-footer">
+      <span class="transition-dismiss">Tap anywhere or press Escape to dismiss</span>
+    </div>
+  </div>
+
+  <!-- ===== Achievement modal ===== -->
+  <div class="modal-backdrop" id="achieveBackdrop">
+    <div class="modal-card">
+      <div class="modal-header">
+        <span class="modal-title">Record an achievement</span>
+        <button class="panel-close" id="achieveCloseBtn" aria-label="Close">×</button>
+      </div>
+      <div class="modal-body">
+        <span class="field-label">What did they do well?</span>
+        <div class="icon-picker" id="iconPicker"></div>
+
+        <span class="field-label">Student name</span>
+        <input type="text" id="achieveNameInput" placeholder="e.g. Jamie">
+
+        <span class="field-label">Note (optional)</span>
+        <input type="text" id="achieveNoteInput" placeholder="e.g. Explained the method really clearly">
+
+        <div class="btn-row">
+          <button class="btn" id="addAchieveBtn">Add &amp; show on screen</button>
+        </div>
+
+        <div class="achieve-list" id="achieveList"></div>
+      </div>
+      <div class="modal-footer">
+        <div class="btn-row" style="margin-top:0;">
+          <button class="btn ghost" id="copyAchieveBtn">Copy list</button>
+          <button class="btn ghost" id="clearAchieveBtn">Clear list</button>
+        </div>
+        <span class="copy-confirm" id="copyConfirm"></span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ---------- Data ---------- */
+
+  var ACTIVITIES_DEFAULT = [
+    "Discussion", "Exam conditions", "Graph (bar)", "Graph (histogram)",
+    "Graph (line)", "Green pen", "Literacy", "Maths", "Pair and share",
+    "Practical in progress", "Retrieval", "Revision",
+    "Scatter graph", "Sketch a diagram", "Test", "Tidy away time",
+    "Whisper only", "Work in silence please", "Work on your own"
+  ];
+
+  // The working activity list — starts from defaults but can be replaced
+  // by loading a saved JSON file. Stored here so save/load can operate on it.
+  var activityList = ACTIVITIES_DEFAULT.slice();
+
+  // Per-activity saved messages (populated when staff save the list)
+  var savedMessages = {};
+
+  var ICONS = {
+    star:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 2.5l3.09 6.26 6.91 1.01-5 4.87 1.18 6.86L12 17.77l-6.18 3.73 1.18-6.86-5-4.87 6.91-1.01z"/></svg>',
+    idea:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="10" r="6"></circle><line x1="10" y1="20" x2="14" y2="20"></line><line x1="10.5" y1="22" x2="13.5" y2="22"></line><line x1="9" y1="16" x2="9" y2="13"></line><line x1="15" y1="16" x2="15" y2="13"></line></svg>',
+    chat:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 4h16v11H9l-5 5z"></path></svg>',
+    thumb:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11h4v10H3z"></path><path d="M7 11l3-8a2 2 0 0 1 2 2v5h6a2 2 0 0 1 2 2l-1.5 7a2 2 0 0 1-2 1.5H7z"></path></svg>',
+    growth:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 17 9 11 13 15 21 7"></polyline><polyline points="14 7 21 7 21 14"></polyline></svg>',
+    trophy:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M7 4H4a2 2 0 0 0-2 2v1c0 2.5 1.5 4.5 4 5.4M17 4h3a2 2 0 0 1 2 2v1c0 2.5-1.5 4.5-4 5.4"/><path d="M7 4h10v7a5 5 0 0 1-10 0z"/></svg>',
+    book:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>',
+    search:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>',
+    bolt:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polyline></svg>',
+    heart:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>'
+  };
+  var ICON_ORDER = ["star","idea","chat","thumb","growth","trophy","book","search","bolt","heart"];
+
+  // Each graph type auto-fills the message box with its own fixed set of
+  // drawing reminders (only when the box is empty — never overwrites a
+  // teacher's own message). Edit the wording here if it ever needs tweaking.
+  var ACTIVITY_TIPS = {
+    "Graph (line)": [
+      "Use a pencil",
+      "Use a ruler",
+      "Label the axes",
+      "Use equal intervals",
+      "Independent variable on the x-axis",
+      "Crosses, not dots"
+    ],
+    "Graph (bar)": [
+      "Use a pencil",
+      "Use a ruler",
+      "Label the axes",
+      "Use equal intervals",
+      "Independent variable on the x-axis",
+      "Discontinuous data — bars don't touch"
+    ],
+    "Graph (histogram)": [
+      "Use a pencil",
+      "Use a ruler",
+      "Label the axes",
+      "Use equal intervals",
+      "Independent variable on the x-axis",
+      "Continuous data — bars touch"
+    ]
+  };
+  var TIP_HOLD_MS = 4000; // how long each rotating tip stays on screen
+
+  /* ---------- State ---------- */
+
+  var state = {
+    activity: "Green pen",
+    showMessage: false,
+    mini: false,
+    clockVisible: true,
+    timer: {
+      mode: "down",
+      minutes: 5,
+      seconds: 0,
+      remaining: 300,
+      running: false,
+      intervalId: null,
+      sound: true,
+      visible: false,
+      timesUp: false
+    }
+  };
+
+  var achievements = [];
+  var selectedIcon = "star";
+  var DASH_TOTAL = 276.46; // 2 * PI * r(44)
+
+  /* ---------- Element refs ---------- */
+
+  var el = {
+    appRoot: document.getElementById("appRoot"),
+    activityTitle: document.getElementById("activityTitle"),
+    messageText: document.getElementById("messageText"),
+    tipRotator: document.getElementById("tipRotator"),
+    tipCurrent: document.getElementById("tipCurrent"),
+    tipDots: document.getElementById("tipDots"),
+    activityGrid: document.getElementById("activityGrid"),
+    customActivityInput: document.getElementById("customActivityInput"),
+    customActivityBtn: document.getElementById("customActivityBtn"),
+    messageInput: document.getElementById("messageInput"),
+    applyMessageBtn: document.getElementById("applyMessageBtn"),
+    clearMessageBtn: document.getElementById("clearMessageBtn"),
+    gearBtn: document.getElementById("gearBtn"),
+    panelCloseBtn: document.getElementById("panelCloseBtn"),
+    controlPanel: document.getElementById("controlPanel"),
+    clockEl: document.getElementById("clockEl"),
+    clockToggle: document.getElementById("clockToggle"),
+    miniModeBtn: document.getElementById("miniModeBtn"),
+    exitMiniBtn: document.getElementById("exitMiniBtn"),
+    bgSwatches: document.getElementById("bgSwatches"),
+    titleSwatches: document.getElementById("titleSwatches"),
+    stageGlow: document.getElementById("stageGlow"),
+    stageEl: document.getElementById("stageEl"),
+    achieveSidebar: document.getElementById("achieveSidebar"),
+    achieveSidebarList: document.getElementById("achieveSidebarList"),
+    saveActivitiesBtn: document.getElementById("saveActivitiesBtn"),
+    loadActivitiesBtn: document.getElementById("loadActivitiesBtn"),
+    restoreDefaultsBtn: document.getElementById("restoreDefaultsBtn"),
+    loadFileInput: document.getElementById("loadFileInput"),
+    openTransitionBtn: document.getElementById("openTransitionBtn"),
+    transitionOverlay: document.getElementById("transitionOverlay"),
+    tPairs: [
+      document.getElementById("tPair0"),
+      document.getElementById("tPair1"),
+      document.getElementById("tPair2")
+    ],
+    speedBtns: document.querySelectorAll("[data-speed]"),
+
+    modeDownBtn: document.getElementById("modeDownBtn"),
+    modeUpBtn: document.getElementById("modeUpBtn"),
+    durationControls: document.getElementById("durationControls"),
+    minutesInput: document.getElementById("minutesInput"),
+    secondsInput: document.getElementById("secondsInput"),
+    startBtn: document.getElementById("startBtn"),
+    pauseBtn: document.getElementById("pauseBtn"),
+    resetBtn: document.getElementById("resetBtn"),
+    soundToggle: document.getElementById("soundToggle"),
+    showTimerToggle: document.getElementById("showTimerToggle"),
+
+    timerDial: document.getElementById("timerDial"),
+    timerProgress: document.getElementById("timerProgress"),
+    timerDigits: document.getElementById("timerDigits"),
+    timerEyebrow: document.getElementById("timerEyebrow"),
+    timerCloseBtn: document.getElementById("timerCloseBtn"),
+    timeUpLabel: document.getElementById("timeUpLabel"),
+
+    openAchieveBtn: document.getElementById("openAchieveBtn"),
+    achieveBackdrop: document.getElementById("achieveBackdrop"),
+    achieveCloseBtn: document.getElementById("achieveCloseBtn"),
+    iconPicker: document.getElementById("iconPicker"),
+    achieveNameInput: document.getElementById("achieveNameInput"),
+    achieveNoteInput: document.getElementById("achieveNoteInput"),
+    addAchieveBtn: document.getElementById("addAchieveBtn"),
+    achieveList: document.getElementById("achieveList"),
+    copyAchieveBtn: document.getElementById("copyAchieveBtn"),
+    clearAchieveBtn: document.getElementById("clearAchieveBtn"),
+    copyConfirm: document.getElementById("copyConfirm"),
+
+    celebrateOverlay: document.getElementById("celebrateOverlay"),
+    celebrateIcon: document.getElementById("celebrateIcon"),
+    celebrateName: document.getElementById("celebrateName"),
+    celebrateNote: document.getElementById("celebrateNote")
+  };
+
+  /* ---------- Helpers ---------- */
+
+  function pad(n) { return n < 10 ? "0" + n : "" + n; }
+
+  function formatTime(totalSeconds) {
+    var m = Math.floor(totalSeconds / 60);
+    var s = totalSeconds % 60;
+    return pad(m) + ":" + pad(s);
+  }
+
+  function iconSvg(key) { return ICONS[key] || ICONS.star; }
+
+  /* ---------- Activity ---------- */
+
+  function buildActivityGrid() {
+    el.activityGrid.innerHTML = "";
+    activityList.forEach(function (name) {
+      var btn = document.createElement("button");
+      btn.className = "chip";
+      btn.textContent = name;
+      btn.dataset.activity = name;
+      btn.addEventListener("click", function () { setActivity(name); });
+      el.activityGrid.appendChild(btn);
+    });
+  }
+
+  function setActivity(name) {
+    state.activity = name;
+    el.activityTitle.textContent = name;
+
+    var chips = el.activityGrid.querySelectorAll(".chip");
+    chips.forEach(function (c) {
+      c.classList.toggle("active", c.dataset.activity === name);
+    });
+    el.customActivityInput.value = "";
+    maybeAutofillGraphTips(name);
+    fitActivityTitle();
+  }
+
+  el.customActivityBtn.addEventListener("click", applyCustomActivity);
+  el.customActivityInput.addEventListener("keydown", function (e) {
+    if (e.key === "Enter") applyCustomActivity();
+  });
+  function applyCustomActivity() {
+    var val = el.customActivityInput.value.trim();
+    if (!val) return;
+    state.activity = val;
+    el.activityTitle.textContent = val;
+    el.activityGrid.querySelectorAll(".chip").forEach(function (c) {
+      c.classList.remove("active");
+    });
+    fitActivityTitle();
+  }
+
+  // Shrinks the activity title's font size, if needed, so that the single
+  // longest word always fits the available width on one line. This is what
+  // actually prevents words like "(histogram)" or "conditions" from being
+  // split mid-word — simple character-count thresholds aren't reliable
+  // because the same word can fit fine at one viewport size/sidebar state
+  // and not another.
+  function fitActivityTitle() {
+    var titleEl = el.activityTitle;
+    var text = titleEl.textContent;
+    if (!text) return;
+
+    // Clear any previous override so the CSS clamp() (full-size or mini
+    // mode, whichever currently applies) sets the natural starting point.
+    titleEl.style.fontSize = "";
+    var natural = parseFloat(window.getComputedStyle(titleEl).fontSize);
+
+    var container = titleEl.parentElement;
+    if (!container) return;
+    var cs = window.getComputedStyle(container);
+    var padding = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
+    // Small safety margin: canvas text measurement and the browser's own
+    // text layout don't always agree down to the last sub-pixel, and a
+    // letter-spacing gap that's even slightly under-counted is enough to
+    // push a trailing character like ")" onto the next line.
+    var available = (container.clientWidth - padding) * 0.97;
+    if (available <= 0 || !natural) return;
+
+    var ts = window.getComputedStyle(titleEl);
+    // letter-spacing comes back as an absolute px value (e.g. "1.4px"),
+    // already resolved against the current "natural" font-size above.
+    var letterSpacingPx = parseFloat(ts.letterSpacing) || 0;
+    var letterSpacingEm = natural ? (letterSpacingPx / natural) : 0;
+
+    var ref = 100; // reference px size for measuring, scaled back down after
+    if (!fitActivityTitle._ctx) {
+      fitActivityTitle._ctx = document.createElement("canvas").getContext("2d");
+    }
+    var ctx = fitActivityTitle._ctx;
+    ctx.font = ts.fontWeight + " " + ref + "px " + ts.fontFamily;
+
+    // Measure the uppercase form, since text-transform: uppercase changes
+    // the rendered width compared to the raw text content. canvas
+    // measureText() does not apply CSS letter-spacing on its own, so that
+    // gap is added back in manually per character (n-1 gaps for n chars).
+    var words = text.toUpperCase().split(" ");
+    var widestEffective = 0;
+    words.forEach(function (w) {
+      var raw = ctx.measureText(w).width;
+      var spacingAtRef = letterSpacingEm * ref * Math.max(0, w.length - 1);
+      var effective = raw + spacingAtRef;
+      if (effective > widestEffective) widestEffective = effective;
+    });
+    if (widestEffective <= 0) return;
+
+    var maxForWidest = (available / widestEffective) * ref;
+    var minSize = 28; // px floor, so it never shrinks into illegibility
+    var size = Math.min(natural, maxForWidest);
+    size = Math.max(size, minSize);
+
+    titleEl.style.fontSize = size + "px";
+  }
+
+  // Re-fit on window resize (debounced) and once webfonts have actually
+  // loaded, since the canvas measurement above needs the real font metrics.
+  var fitResizeTimeout = null;
+  window.addEventListener("resize", function () {
+    clearTimeout(fitResizeTimeout);
+    fitResizeTimeout = setTimeout(fitActivityTitle, 120);
+  });
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(fitActivityTitle);
+  }
+
+  /* ---------- Message (static, or rotating tips if 2+ lines) ---------- */
+
+  var tipRotateInterval = null;
+  var tipIndex = 0;
+  var currentTips = [];
+
+  function linesFromInput(raw) {
+    return raw.split("\n")
+      .map(function (l) { return l.trim(); })
+      .filter(function (l) { return l.length > 0; });
+  }
+
+  function applyMessageFromInput() {
+    setMessageTips(linesFromInput(el.messageInput.value));
+  }
+
+  function setMessageTips(tips) {
+    clearTipRotation();
+    currentTips = tips;
+    state.showMessage = tips.length > 0;
+
+    if (tips.length === 0) {
+      el.messageText.textContent = "";
+      el.messageText.classList.remove("show");
+      el.tipRotator.classList.remove("show");
+      return;
+    }
+    if (tips.length === 1) {
+      el.messageText.textContent = tips[0];
+      el.messageText.classList.add("show");
+      el.tipRotator.classList.remove("show");
+      return;
+    }
+    // Two or more lines: rotate through them one at a time.
+    el.messageText.classList.remove("show");
+    startTipRotation(tips);
+  }
+
+  function startTipRotation(tips) {
+    tipIndex = 0;
+    buildDots(tips.length);
+    showTip(tips, 0, false);
+    el.tipRotator.classList.add("show");
+    tipRotateInterval = setInterval(function () {
+      tipIndex = (tipIndex + 1) % tips.length;
+      showTip(tips, tipIndex, true);
+    }, TIP_HOLD_MS);
+  }
+
+  function clearTipRotation() {
+    if (tipRotateInterval) {
+      clearInterval(tipRotateInterval);
+      tipRotateInterval = null;
+    }
+  }
+
+  function showTip(tips, index, animate) {
+    if (!animate) {
+      el.tipCurrent.textContent = tips[index];
+      updateDots(index);
+      return;
+    }
+    el.tipCurrent.classList.add("fade-out");
+    setTimeout(function () {
+      el.tipCurrent.textContent = tips[index];
+      updateDots(index);
+      // Force a reflow so the fade-in transition actually plays.
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () {
+          el.tipCurrent.classList.remove("fade-out");
+        });
+      });
+    }, 350);
+  }
+
+  function buildDots(count) {
+    el.tipDots.innerHTML = "";
+    for (var i = 0; i < count; i++) {
+      var dot = document.createElement("span");
+      dot.className = "tip-dot" + (i === 0 ? " active" : "");
+      el.tipDots.appendChild(dot);
+    }
+  }
+
+  function updateDots(index) {
+    var dots = el.tipDots.querySelectorAll(".tip-dot");
+    dots.forEach(function (d, i) {
+      d.classList.toggle("active", i === index);
+    });
+  }
+
+  function maybeAutofillGraphTips(activityName) {
+    var tips = ACTIVITY_TIPS[activityName];
+    if (!tips) return;
+    if (el.messageInput.value.trim() !== "") return; // never overwrite a teacher's own message
+    el.messageInput.value = tips.join("\n");
+    applyMessageFromInput();
+  }
+
+  el.applyMessageBtn.addEventListener("click", applyMessageFromInput);
+
+  el.clearMessageBtn.addEventListener("click", function () {
+    el.messageInput.value = "";
+    setMessageTips([]);
+  });
+
+  /* ---------- Control panel open/close ---------- */
+
+  el.gearBtn.addEventListener("click", function () {
+    el.controlPanel.classList.add("open");
+  });
+  el.panelCloseBtn.addEventListener("click", function () {
+    el.controlPanel.classList.remove("open");
+  });
+
+  // Clicking anywhere on the main screen (outside the panel and its own
+  // gear button) closes it, so there's no need to scroll back up to the X.
+  document.addEventListener("click", function (e) {
+    if (!el.controlPanel.classList.contains("open")) return;
+    if (el.controlPanel.contains(e.target)) return;
+    if (el.gearBtn.contains(e.target)) return;
+    el.controlPanel.classList.remove("open");
+  });
+
+  /* ---------- Clock ---------- */
+
+  el.clockToggle.addEventListener("change", function () {
+    state.clockVisible = el.clockToggle.checked;
+    updateClock();
+  });
+
+  function updateClock() {
+    if (!state.clockVisible) {
+      el.clockEl.textContent = "";
+      return;
+    }
+    var now = new Date();
+    el.clockEl.textContent = pad(now.getHours()) + ":" + pad(now.getMinutes());
+  }
+  setInterval(updateClock, 1000);
+  updateClock();
+
+  /* ---------- Colour theme ---------- */
+
+  // Returns the relative luminance of a hex colour (0 = black, 1 = white).
+  function luminance(hex) {
+    var r = parseInt(hex.slice(1, 3), 16) / 255;
+    var g = parseInt(hex.slice(3, 5), 16) / 255;
+    var b = parseInt(hex.slice(5, 7), 16) / 255;
+    function lin(c) { return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); }
+    return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+  }
+
+  // When a background swatch is chosen, auto-suggest a good title colour:
+  // dark background → white, light background → navy.
+  function applyBg(color) {
+    document.documentElement.style.setProperty("--stage-bg", color);
+    el.bgSwatches.querySelectorAll(".swatch").forEach(function (b) {
+      b.classList.toggle("active", b.dataset.bg === color);
+    });
+    var lum = luminance(color);
+    var suggested = lum > 0.35 ? "#0E1630" : "#F4F7FF";
+    applyTitleColor(suggested);
+  }
+
+  function applyTitleColor(color) {
+    document.documentElement.style.setProperty("--title-color", color);
+    el.titleSwatches.querySelectorAll(".swatch").forEach(function (b) {
+      b.classList.toggle("active", b.dataset.title === color);
+    });
+  }
+
+  el.bgSwatches.querySelectorAll(".swatch").forEach(function (btn) {
+    btn.addEventListener("click", function () { applyBg(btn.dataset.bg); });
+  });
+
+  el.titleSwatches.querySelectorAll(".swatch").forEach(function (btn) {
+    btn.addEventListener("click", function () { applyTitleColor(btn.dataset.title); });
+  });
+
+  /* ---------- Save / load activity list ---------- */
+
+  el.saveActivitiesBtn.addEventListener("click", function () {
+    // Snapshot the current message box content against the current activity
+    // so it persists into the saved file.
+    var currentMsg = el.messageInput.value.trim();
+    if (currentMsg && state.activity) {
+      savedMessages[state.activity] = currentMsg;
+    }
+    var payload = {
+      version: 1,
+      activities: activityList.map(function (name) {
+        return { name: name, message: savedMessages[name] || "" };
+      })
+    };
+    var blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = "kimberley-science-activities.json";
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  el.loadActivitiesBtn.addEventListener("click", function () {
+    el.loadFileInput.value = "";
+    el.loadFileInput.click();
+  });
+
+  el.loadFileInput.addEventListener("change", function () {
+    var file = el.loadFileInput.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function (e) {
+      try {
+        var data = JSON.parse(e.target.result);
+        if (!data.activities || !Array.isArray(data.activities)) throw new Error("Bad format");
+        activityList = data.activities.map(function (a) { return a.name; });
+        savedMessages = {};
+        data.activities.forEach(function (a) {
+          if (a.message) savedMessages[a.name] = a.message;
+        });
+        buildActivityGrid();
+        // Show the loaded message for the currently displayed activity if one exists
+        if (savedMessages[state.activity]) {
+          el.messageInput.value = savedMessages[state.activity];
+          applyMessageFromInput();
+        }
+      } catch (err) {
+        alert("Could not read the file. Make sure it is a valid Kimberley Science activities file.");
+      }
+    };
+    reader.readAsText(file);
+  });
+
+  el.restoreDefaultsBtn.addEventListener("click", function () {
+    if (!window.confirm("Reset to the built-in activity list? Your saved messages will also be cleared.")) return;
+    activityList = ACTIVITIES_DEFAULT.slice();
+    savedMessages = {};
+    buildActivityGrid();
+    setActivity("Green pen");
+    el.messageInput.value = "";
+    setMessageTips([]);
+  });
+
+  /* ---------- Mini mode ---------- */
+
+  function setMini(on) {
+    state.mini = on;
+    el.appRoot.classList.toggle("mini", on);
+    if (on) el.controlPanel.classList.remove("open");
+    fitActivityTitle();
+  }
+  el.miniModeBtn.addEventListener("click", function () { setMini(true); });
+  el.exitMiniBtn.addEventListener("click", function () { setMini(false); });
+
+  /* ---------- Timer ---------- */
+
+  function setMode(mode) {
+    pauseTimer();
+    state.timer.mode = mode;
+    el.modeDownBtn.classList.toggle("active", mode === "down");
+    el.modeUpBtn.classList.toggle("active", mode === "up");
+    el.durationControls.style.display = mode === "down" ? "block" : "none";
+    el.timerEyebrow.textContent = mode === "down" ? "Counting down" : "Counting up";
+    el.timerDial.classList.toggle("up", mode === "up");
+    resetTimerValue();
+    renderTimer();
+  }
+  el.modeDownBtn.addEventListener("click", function () { setMode("down"); });
+  el.modeUpBtn.addEventListener("click", function () { setMode("up"); });
+
+  function readDurationInputs() {
+    var m = parseInt(el.minutesInput.value, 10);
+    var s = parseInt(el.secondsInput.value, 10);
+    state.timer.minutes = isNaN(m) ? 0 : Math.max(0, m);
+    state.timer.seconds = isNaN(s) ? 0 : Math.max(0, Math.min(59, s));
+  }
+
+  el.minutesInput.addEventListener("input", function () {
+    if (state.timer.running) return;
+    readDurationInputs();
+    resetTimerValue();
+    renderTimer();
+  });
+  el.secondsInput.addEventListener("input", function () {
+    if (state.timer.running) return;
+    readDurationInputs();
+    resetTimerValue();
+    renderTimer();
+  });
+
+  document.querySelectorAll("[data-preset]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      if (state.timer.running) return;
+      el.minutesInput.value = btn.dataset.preset;
+      el.secondsInput.value = 0;
+      readDurationInputs();
+      resetTimerValue();
+      renderTimer();
+    });
+  });
+
+  function resetTimerValue() {
+    state.timer.timesUp = false;
+    el.timeUpLabel.classList.remove("show");
+    if (state.timer.mode === "down") {
+      state.timer.remaining = state.timer.minutes * 60 + state.timer.seconds;
+    } else {
+      state.timer.remaining = 0;
+    }
+  }
+
+  function startTimer() {
+    if (state.timer.running) return;
+    if (state.timer.mode === "down" && state.timer.remaining <= 0) {
+      readDurationInputs();
+      resetTimerValue();
+    }
+    state.timer.running = true;
+    state.timer.visible = true;
+    el.showTimerToggle.checked = true;
+    el.minutesInput.disabled = true;
+    el.secondsInput.disabled = true;
+    state.timer.intervalId = setInterval(tick, 1000);
+    renderTimer();
+  }
+
+  function pauseTimer() {
+    state.timer.running = false;
+    el.minutesInput.disabled = false;
+    el.secondsInput.disabled = false;
+    if (state.timer.intervalId) {
+      clearInterval(state.timer.intervalId);
+      state.timer.intervalId = null;
+    }
+    renderTimer();
+  }
+
+  function tick() {
+    if (state.timer.mode === "down") {
+      state.timer.remaining--;
+      if (state.timer.remaining <= 0) {
+        state.timer.remaining = 0;
+        pauseTimer();
+        state.timer.timesUp = true;
+        el.timeUpLabel.classList.add("show");
+        if (state.timer.sound) playChime();
+      }
+    } else {
+      state.timer.remaining++;
+    }
+    renderTimer();
+  }
+
+  el.startBtn.addEventListener("click", startTimer);
+  el.pauseBtn.addEventListener("click", pauseTimer);
+  el.resetBtn.addEventListener("click", function () {
+    pauseTimer();
+    readDurationInputs();
+    resetTimerValue();
+    renderTimer();
+  });
+
+  el.soundToggle.addEventListener("change", function () {
+    state.timer.sound = el.soundToggle.checked;
+  });
+  el.showTimerToggle.addEventListener("change", function () {
+    state.timer.visible = el.showTimerToggle.checked;
+    renderTimer();
+  });
+  el.timerCloseBtn.addEventListener("click", function () {
+    pauseTimer();
+    state.timer.visible = false;
+    el.showTimerToggle.checked = false;
+    renderTimer();
+  });
+
+  function renderTimer() {
+    el.timerDial.classList.toggle("show", state.timer.visible);
+    el.timerDigits.textContent = formatTime(state.timer.remaining);
+
+    if (state.timer.mode === "down") {
+      var total = Math.max(1, state.timer.minutes * 60 + state.timer.seconds);
+      var fraction = state.timer.remaining / total;
+      var offset = DASH_TOTAL * (1 - fraction);
+      el.timerProgress.style.strokeDashoffset = offset;
+      el.timerDial.classList.toggle("urgent", state.timer.running && state.timer.remaining <= 10 && state.timer.remaining > 0);
+    } else {
+      el.timerProgress.style.strokeDashoffset = 0;
+      el.timerDial.classList.remove("urgent");
+    }
+  }
+
+  function playChime() {
+    try {
+      var ctx = new (window.AudioContext || window.webkitAudioContext)();
+      var notes = [880, 988, 1175];
+      notes.forEach(function (freq, i) {
+        var osc = ctx.createOscillator();
+        var gain = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.value = freq;
+        gain.gain.value = 0.0001;
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        var startTime = ctx.currentTime + i * 0.18;
+        gain.gain.exponentialRampToValueAtTime(0.18, startTime + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.35);
+        osc.start(startTime);
+        osc.stop(startTime + 0.4);
+      });
+    } catch (e) { /* audio not available, fail silently */ }
+  }
+
+  /* ---------- Achievements ---------- */
+
+  function buildIconPicker() {
+    ICON_ORDER.forEach(function (key) {
+      var btn = document.createElement("button");
+      btn.className = "icon-option" + (key === selectedIcon ? " selected" : "");
+      btn.innerHTML = iconSvg(key);
+      btn.dataset.icon = key;
+      btn.title = key;
+      btn.addEventListener("click", function () {
+        selectedIcon = key;
+        el.iconPicker.querySelectorAll(".icon-option").forEach(function (b) {
+          b.classList.toggle("selected", b.dataset.icon === key);
+        });
+      });
+      el.iconPicker.appendChild(btn);
+    });
+  }
+
+  el.openAchieveBtn.addEventListener("click", function () {
+    el.achieveBackdrop.classList.add("open");
+  });
+  el.achieveCloseBtn.addEventListener("click", closeAchieveModal);
+  el.achieveBackdrop.addEventListener("click", function (e) {
+    if (e.target === el.achieveBackdrop) closeAchieveModal();
+  });
+  function closeAchieveModal() {
+    el.achieveBackdrop.classList.remove("open");
+  }
+
+  el.addAchieveBtn.addEventListener("click", addAchievement);
+  el.achieveNameInput.addEventListener("keydown", function (e) {
+    if (e.key === "Enter") addAchievement();
+  });
+
+  function addAchievement() {
+    var name = el.achieveNameInput.value.trim();
+    var note = el.achieveNoteInput.value.trim();
+    if (!name) {
+      el.achieveNameInput.focus();
+      el.achieveNameInput.style.borderColor = "var(--red)";
+      setTimeout(function () { el.achieveNameInput.style.borderColor = "var(--line)"; }, 1200);
+      return;
+    }
+    var entry = {
+      id: Date.now(),
+      name: name,
+      note: note,
+      icon: selectedIcon,
+      time: new Date()
+    };
+    achievements.unshift(entry);
+    renderAchieveList();
+
+    el.achieveNameInput.value = "";
+    el.achieveNoteInput.value = "";
+    closeAchieveModal();
+    celebrate(entry);
+  }
+
+  function renderAchieveList() {
+    el.achieveList.innerHTML = "";
+    if (achievements.length === 0) {
+      var empty = document.createElement("div");
+      empty.className = "empty-note";
+      empty.textContent = "No achievements recorded yet this lesson.";
+      el.achieveList.appendChild(empty);
+      renderAchieveSidebar();
+      return;
+    }
+    achievements.forEach(function (entry) {
+      var row = document.createElement("div");
+      row.className = "achieve-row";
+
+      var iconWrap = document.createElement("div");
+      iconWrap.className = "icon-wrap";
+      iconWrap.innerHTML = iconSvg(entry.icon);
+
+      var info = document.createElement("div");
+      info.className = "info";
+
+      var nameEl = document.createElement("div");
+      nameEl.className = "name";
+      nameEl.textContent = entry.name;
+
+      var noteEl = document.createElement("div");
+      noteEl.className = "note";
+      noteEl.textContent = entry.note;
+      if (!entry.note) noteEl.style.display = "none";
+
+      var timeEl = document.createElement("div");
+      timeEl.className = "time";
+      timeEl.textContent = pad(entry.time.getHours()) + ":" + pad(entry.time.getMinutes());
+
+      info.appendChild(nameEl);
+      info.appendChild(noteEl);
+      info.appendChild(timeEl);
+
+      var delBtn = document.createElement("button");
+      delBtn.className = "del";
+      delBtn.innerHTML = "&times;";
+      delBtn.title = "Remove";
+      delBtn.addEventListener("click", function () {
+        achievements = achievements.filter(function (a) { return a.id !== entry.id; });
+        renderAchieveList();
+      });
+
+      row.appendChild(iconWrap);
+      row.appendChild(info);
+      row.appendChild(delBtn);
+      el.achieveList.appendChild(row);
+    });
+    renderAchieveSidebar();
+  }
+
+  function renderAchieveSidebar() {
+    el.achieveSidebarList.innerHTML = "";
+    if (achievements.length === 0) {
+      el.achieveSidebar.classList.remove("show");
+      fitActivityTitle();
+      return;
+    }
+    el.achieveSidebar.classList.add("show");
+    achievements.forEach(function (entry) {
+      var row = document.createElement("div");
+      row.className = "sidebar-entry";
+
+      var iconWrap = document.createElement("div");
+      iconWrap.className = "icon-wrap";
+      iconWrap.innerHTML = iconSvg(entry.icon);
+
+      var nameEl = document.createElement("div");
+      nameEl.className = "name";
+      nameEl.textContent = entry.name;
+
+      row.appendChild(iconWrap);
+      row.appendChild(nameEl);
+      el.achieveSidebarList.appendChild(row);
+    });
+    fitActivityTitle();
+  }
+
+  el.copyAchieveBtn.addEventListener("click", function () {
+    if (achievements.length === 0) return;
+    var lines = achievements.map(function (a) {
+      var timeStr = pad(a.time.getHours()) + ":" + pad(a.time.getMinutes());
+      var line = timeStr + " — " + a.name;
+      if (a.note) line += ": " + a.note;
+      return line;
+    });
+    var text = lines.join("\n");
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () {
+        showCopyConfirm();
+      }).catch(function () {
+        fallbackCopy(text);
+      });
+    } else {
+      fallbackCopy(text);
+    }
+  });
+
+  function fallbackCopy(text) {
+    var ta = document.createElement("textarea");
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand("copy"); showCopyConfirm(); } catch (e) {}
+    document.body.removeChild(ta);
+  }
+
+  function showCopyConfirm() {
+    el.copyConfirm.textContent = "Copied!";
+    setTimeout(function () { el.copyConfirm.textContent = ""; }, 2000);
+  }
+
+  el.clearAchieveBtn.addEventListener("click", function () {
+    if (achievements.length === 0) return;
+    if (window.confirm("Clear all recorded achievements for this lesson?")) {
+      achievements = [];
+      renderAchieveList();
+    }
+  });
+
+  var celebrateTimeout = null;
+  function celebrate(entry) {
+    el.celebrateIcon.innerHTML = iconSvg(entry.icon);
+    el.celebrateName.textContent = entry.name;
+    el.celebrateNote.textContent = entry.note;
+    el.celebrateOverlay.classList.add("show");
+    if (celebrateTimeout) clearTimeout(celebrateTimeout);
+    celebrateTimeout = setTimeout(function () {
+      el.celebrateOverlay.classList.remove("show");
+    }, 5000);
+  }
+
+  /* ---------- Escape key closes overlays ---------- */
+
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") {
+      if (el.transitionOverlay.classList.contains("open")) {
+        closeTransition();
+        return;
+      }
+      closeAchieveModal();
+      el.controlPanel.classList.remove("open");
+    }
+  });
+
+  /* ---------- Transition slide (Respect / Proud / Succeed) ---------- */
+
+  var transitionSpeed = 5000; // ms between each reveal (default: Calm)
+  var transitionTimeouts = [];
+
+  // Speed picker buttons
+  el.speedBtns.forEach(function (btn) {
+    btn.addEventListener("click", function (e) {
+      e.stopPropagation(); // don't let this click dismiss the overlay
+      transitionSpeed = parseInt(btn.dataset.speed, 10);
+      el.speedBtns.forEach(function (b) { b.classList.toggle("active", b === btn); });
+    });
+  });
+
+  // Synthesise a bell-like gong: sharp attack, resonant decay, ~1700–1900 Hz.
+  // Two partials (fundamental + 2nd harmonic) give a richer, bell-like tone.
+  function playGong() {
+    try {
+      var ctx = new (window.AudioContext || window.webkitAudioContext)();
+      var freqs = [1760, 3520]; // A6 and A7 — sit above most voice frequencies
+      var gains = [0.22, 0.09];
+      freqs.forEach(function (freq, i) {
+        var osc = ctx.createOscillator();
+        var gain = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.value = freq;
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        var t = ctx.currentTime;
+        gain.gain.setValueAtTime(0.0001, t);
+        gain.gain.exponentialRampToValueAtTime(gains[i], t + 0.004); // sharp attack
+        gain.gain.exponentialRampToValueAtTime(gains[i] * 0.3, t + 0.05);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + 1.2);    // long decay
+        osc.start(t);
+        osc.stop(t + 1.3);
+      });
+    } catch (e) { /* silent fallback if Web Audio not available */ }
+  }
+
+  function clearTransitionTimeouts() {
+    transitionTimeouts.forEach(function (id) { clearTimeout(id); });
+    transitionTimeouts = [];
+  }
+
+  function openTransition() {
+    // Reset all pairs to hidden
+    el.tPairs.forEach(function (p) { p.classList.remove("visible"); });
+    el.transitionOverlay.classList.add("open");
+    el.controlPanel.classList.remove("open");
+    clearTransitionTimeouts();
+
+    // Reveal each pair in turn with a gong, starting after the first delay
+    el.tPairs.forEach(function (pair, i) {
+      var id = setTimeout(function () {
+        playGong();
+        pair.classList.add("visible");
+      }, transitionSpeed * (i + 1));
+      transitionTimeouts.push(id);
+    });
+  }
+
+  function closeTransition() {
+    clearTransitionTimeouts();
+    el.transitionOverlay.classList.remove("open");
+    el.tPairs.forEach(function (p) { p.classList.remove("visible"); });
+  }
+
+  el.openTransitionBtn.addEventListener("click", openTransition);
+
+  // Tap anywhere on the overlay (but NOT on a speed button) to dismiss
+  el.transitionOverlay.addEventListener("click", function (e) {
+    if (e.target.closest(".transition-speed-btn")) return;
+    closeTransition();
+  });
+
+  /* ---------- Init ---------- */
+
+  buildActivityGrid();
+  buildIconPicker();
+  setActivity(state.activity);
+  renderAchieveList();
+  resetTimerValue();
+  renderTimer();
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(fitActivityTitle);
+  }
+
+}());
+</script>
+</body>
+</html>
